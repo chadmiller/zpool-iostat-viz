@@ -1,0 +1,299 @@
+#!/usr/bin/env python3
+
+#
+# Copyright 2021 Chad Miller  chad.org
+#
+
+import sys
+import curses
+import subprocess
+from collections import namedtuple
+import re
+from contextlib import suppress
+import base64
+
+
+ColsIoStat = namedtuple("ColsIoStat", "latency_nsec total_read total_write disk_read disk_write syncq_read syncq_write asyncq_read asyncq_write scrub trim")
+IoStatSimple = namedtuple("IoStatSimple", "latency_nsec disk_read disk_write syncq_read syncq_write asyncq_read asyncq_write scrub")
+
+EMPTY_COLOR = 239
+DISPLAY_EMPTY = "|"
+HISTOGRAM_ANSI_COLORS = range(40, 225+1, 77-40)
+TIME_ANSI_COLORS = range(231, 196-1, 225-231)
+DISPLAY_CHARS = ".abcdefghijklmnopqrstuvwxyz^"
+
+raw = None
+
+def short_time_and_color(ns):
+    """Given a time in nanoseconds, return a pleasant, legible string
+    approximating that time, and an integer representing an appropriate color for
+    that number of nanoseconds of waiting. Bigger is worse."""
+    ## These timing colors are stupid and overly-opinionated. Please advise.
+    if ns < 30000:
+        color = TIME_ANSI_COLORS[0]
+    elif ns < 600000:
+        color = TIME_ANSI_COLORS[1]
+    elif ns < 8500000:
+        color = TIME_ANSI_COLORS[2]
+    elif ns < 15000000:
+        color = TIME_ANSI_COLORS[3]
+    elif ns < 155000000:
+        color = TIME_ANSI_COLORS[4]
+    else:
+        color = TIME_ANSI_COLORS[-1]
+
+    if ns < 800000:
+        return "{: 7.2f}µs".format(ns/1000), color
+    elif ns < 1000000000:
+        return "{: 7.2f}ms".format(ns/1000/1000), color
+    else:
+        return "{: 7.2f}s".format(ns/1000/1000/1000), color
+
+
+def get_stats(pool_name, filename=None):
+    """Populate a "raw" global variable of the last thing we read, and return a
+    structure -- a list of pairs of vdev-name and vdev-timings, where a vdev-timing
+    is a list of rows, each as a ColsIoStat named tuple."""
+    global raw
+    if filename:
+        with open(filename, encoding="UTF-8") as f:
+            raw = f.read()
+    else:
+        zpool_cmd = subprocess.run(["zpool", "iostat", "-wvHp"] + ([pool_name] if pool_name else []), check=True, capture_output=True, encoding="UTF-8")
+        raw = zpool_cmd.stdout
+    stats = []
+    for line in raw.split("\n"):
+        if not line:
+            continue
+        elif "\t" in line:
+            row_number += 1
+            if row_number < 6: continue
+            stats[-1][1].append(ColsIoStat(*tuple(int(s) for s in line.split("\t"))))
+        else:
+            row_number = -1
+            stats.append([line, []])
+
+    return stats
+
+
+def scaled_to_fraction(range_minimum, subject_value, range_maximum):
+    """Take a number in a range and return a fraction of how far it is into
+    that range."""
+    if range_minimum == range_maximum:
+        return 0
+    assert range_minimum <= subject_value <= range_maximum, (range_minimum, subject_value, range_maximum)
+    return (subject_value-range_minimum) / (range_maximum-range_minimum)
+
+
+def interpret1(data):
+    """Take the disk, syncq, asyncq, and scrub stats out. Discard the totals."""
+    return tuple(IoStatSimple(row.latency_nsec,
+            row.disk_read, row.disk_write,
+            row.syncq_read, row.syncq_write,
+            row.asyncq_read, row.asyncq_write,
+            row.scrub) for row in data)
+
+interpret = interpret1
+
+
+def actual_display_at_location(window, column_offset, title, data, lenstats, current, movchr1, movchr2):
+    """Render a narrow table at a specified distance from the left. Useful to
+    have parallel renderings of what's happening with a level of organization in a
+    pool."""
+    column_width = 2
+
+    table = interpret(data)
+    maxes = [max(r) for r in zip(*table)]
+    try:
+        mins = [min(v for v in r if v != m/100) for r, m in zip(zip(*table), maxes)]
+    except ValueError:
+        mins = [0 for x in maxes]
+
+    rows_containing_data = list()
+    for row_number, row in enumerate(data):
+        for column_number, val in enumerate(row[1:]):
+            if val > 0:
+                rows_containing_data.append(row_number)
+
+    with suppress(curses.error):
+        window.addstr(0, column_offset-8, "{}/{} {} {}   {}".format(current+1, lenstats, movchr1, movchr2, title))
+    #for row_number in range(1, len(table[0])):
+    #    if not rows_containing_data or not min(rows_containing_data)-1 <= row_number <= max(rows_containing_data)+1: continue
+    #    with suppress(curses.error):
+    #        window.addstr(1, column_offset+(row_number*column_width), re.sub("\B. ?", "", table[0]._fields[row_number].replace("_", " ")))
+    printed_row_number = 0
+    for row_number, row in enumerate(table):
+        if not rows_containing_data or not min(rows_containing_data)-1 <= row_number <= max(rows_containing_data)+1: continue
+        printed_row_number += 1
+        with suppress(curses.error):
+            t, col = short_time_and_color(row[0])
+            window.addstr(printed_row_number, column_offset-8, t, curses.color_pair(col)) # write legend
+        for column_number, val in enumerate(row):
+            if column_number == 0: continue  # skip legend
+            if val > maxes[column_number]//1000:  # don't show one-offs
+                scaled_0_to_1 = scaled_to_fraction(mins[column_number], val, maxes[column_number])
+                glyph = DISPLAY_CHARS[int(scaled_0_to_1 * (len(DISPLAY_CHARS)-1))]
+                color = HISTOGRAM_ANSI_COLORS[int(scaled_0_to_1 * (len(HISTOGRAM_ANSI_COLORS)-1))]
+                with suppress(curses.error):
+                    window.addstr(printed_row_number, column_offset+(column_number*column_width), glyph, curses.color_pair(color))
+            else:
+                with suppress(curses.error):
+                    window.addstr(printed_row_number, column_offset+(column_number*column_width), DISPLAY_EMPTY, curses.color_pair(EMPTY_COLOR))
+
+    if rows_containing_data:
+    #        window.addstr(1, column_offset+(row_number*column_width), re.sub("\B. ?", "", table[0]._fields[row_number].replace("_", " ")))
+        stat_names = list(reversed(list(table[0]._fields[1:])))
+        while stat_names:
+            printed_row_number += 1
+            stat_name = stat_names.pop(0)
+            with suppress(curses.error):
+                window.addstr(printed_row_number, column_offset+3, "{}`{}".format("| " * len(stat_names), stat_name))
+    else:
+        with suppress(curses.error):
+            window.addstr(4, 16, "(no data)")
+
+
+def display_each_to(pool, filename, window):
+    """Display all information about a vdev in a table."""
+    stats = get_stats(pool, filename)
+
+    current1 = 0
+    current2 = -1
+    while True:
+        window.clear()
+
+        title, data = stats[current1]
+        actual_display_at_location(window, 12, title, data, len(stats), current1, "←", "→")
+
+        if window.getmaxyx()[1] > 90:
+            title, data = stats[current2]
+            actual_display_at_location(window, 60, title, data, len(stats), current2, "↓", "↑")
+
+        height, width = window.getmaxyx()
+        message = "  Population of column's histogram buckets shown with .a-z^ and colors"
+        with suppress(curses.error):
+            window.addstr(height-1, width-len(message)-1, message)
+
+        window.refresh()
+
+        in_key = window.getch()
+        if in_key == -1:
+            pass
+        elif in_key == curses.KEY_RIGHT:
+            current1 += 1
+        elif in_key == curses.KEY_LEFT:
+            current1 -= 1
+        elif in_key == curses.KEY_UP:
+            current2 += 1
+        elif in_key == curses.KEY_DOWN:
+            current2 -= 1
+        elif in_key == ord('q') or in_key == ord('x') or in_key == 27:
+            return
+        current1 += len(stats)
+        current1 %= len(stats)
+        current2 += len(stats)
+        current2 %= len(stats)
+
+        stats = get_stats(pool, filename)
+
+
+def display_parallel_to(pool, filename, window):
+    """Display all devices for a given measurement. Emphasize comparison of devices."""
+    stats = get_stats(pool, filename)
+
+    current = 0
+    while True:
+        window.clear()
+
+        column_max = tuple(max(row[current+1] for row in device_data) for device_name, device_data in stats)
+
+        rows_containing_data = set()
+        for row_number, row in enumerate(stats[0][1]):
+            for device_number, (device_name, device_data) in enumerate(stats):
+                scaled_0_to_1 = scaled_to_fraction(0, device_data[row_number][current+1], column_max[device_number])
+                if scaled_0_to_1 > 0.001:
+                    rows_containing_data.add(row_number)
+
+        with suppress(curses.error):
+            window.addstr(0, 0, "Displaying {!r} for all device levels.  {}/{} ← → ".format(stats[0][1][0]._fields[current+1], current+1, len(stats[0][1][0])-1))
+        # Assume all histogram buckets are the same
+        printed_row_number = 0
+        for row_number, row in enumerate(stats[0][1]):
+            if not rows_containing_data or not min(rows_containing_data)-1 <= row_number <= max(rows_containing_data)+1: continue
+            printed_row_number += 1
+            with suppress(curses.error):
+                t, col = short_time_and_color(row[0])
+                window.addstr(printed_row_number, 0, t, curses.color_pair(col))  # write legend
+            for device_number, (device_name, device_data) in enumerate(stats):
+                scaled_0_to_1 = scaled_to_fraction(0, device_data[row_number][current+1], column_max[device_number])
+                glyph = DISPLAY_CHARS[int(scaled_0_to_1 * (len(DISPLAY_CHARS)-1))]
+                color = HISTOGRAM_ANSI_COLORS[int(scaled_0_to_1 * (len(HISTOGRAM_ANSI_COLORS)-1))]
+                if scaled_0_to_1 > 0.001:
+                    with suppress(curses.error):
+                        window.addstr(printed_row_number, 12+(device_number*2), glyph, curses.color_pair(color))
+                else:
+                    with suppress(curses.error):
+                        window.addstr(printed_row_number, 12+(device_number*2), DISPLAY_EMPTY, curses.color_pair(EMPTY_COLOR))
+
+        if rows_containing_data:
+            device_names = list(reversed(list(device_name for device_name, device_data in stats)))
+            while device_names:
+                printed_row_number += 1
+                device_name = device_names.pop(0)
+                with suppress(curses.error):
+                    window.addstr(printed_row_number, 12, "{}`{}".format("| " * len(device_names), device_name))
+        else:
+            with suppress(curses.error):
+                window.addstr(4, 16, "(no data)")
+
+        height, width = window.getmaxyx()
+        message = "  Population of histogram buckets shown with .a-z^ and colors"
+        with suppress(curses.error):
+            window.addstr(height-1, width-len(message)-1, message)
+
+        window.refresh()
+
+        in_key = window.getch()
+        if in_key == -1:
+            pass
+        elif in_key == curses.KEY_RIGHT:
+            current += 1
+        elif in_key == curses.KEY_LEFT:
+            current -= 1
+        elif in_key == ord('q') or in_key == ord('x') or in_key == 27:
+            return
+        current += len(stats[0][1][0])-1
+        current %= len(stats[0][1][0])-1
+
+        stats = get_stats(pool, filename)
+
+
+
+def main(window, args):
+    pool = args[1] if len(args) >= 2 else None
+    filename = args[2] if len(args) >= 3 else None
+
+    window.timeout(1000)
+
+    curses.use_default_colors()
+    for i in range(0, curses.COLORS):
+        curses.init_pair(i + 1, i, -1)
+
+    display_each_to(pool, filename, window)
+    display_parallel_to(pool, filename, window)
+
+
+if __name__ == "__main__":
+    try:
+        curses.wrapper(lambda window: main(window, sys.argv))
+    except subprocess.CalledProcessError as exc:
+        print("I couldn't get your pool information. Make sure you have 'zpool' program and specify your pool correctly.")
+        print(exc)
+    except Exception as exc:
+        print("CRASH! Sorry!")
+        print("Please report this error at \nhttps://github.com/chadmiller/zfs-stat-info/issues/new")
+        print()
+        print("Paste the following:")
+        if raw is not None:
+            print(base64.encodebytes(raw.encode("UTF-8")).decode("ASCII"), end="and also include ")
+        raise exc
