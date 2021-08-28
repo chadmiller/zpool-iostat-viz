@@ -1,5 +1,7 @@
 # Getting the gist of zfs statistics
 
+https://user-images.githubusercontent.com/287758/131224903-c7ec43ce-66b1-4caa-bc69-c969468a76d2.mp4
+
 The ZFS command "zpool iostat" provides a histogram listing of how often it takes to do things in parts of your pool. It's useful to find bottlenecks and problem devices, but it's also kind of hard to read, with the nearly 4000 mixed-unit numbers.
 
 (First, what's a histogram? It's an arrangement of data to show how measurements can be different and how often. For instance, last year, 60 times it took Joe 3-to-4 hours to drive to Albequerque, and 20 times it took 4-to-5 hours, 80 times it took 5-to-6 hours, and 2 times it took 6-to-7 hours. That 60-times & 20-times & 80-times & 2-times is a histogram showing population of the buckets of driving-times. It can help you understand the pattern of likelihoods. It seems when Joe has a traffic problem, it's usually pretty big; and problems happen more often than not; but sometimes it's a breeze.)
