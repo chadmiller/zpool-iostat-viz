@@ -116,7 +116,7 @@ def actual_display_at_location(window, column_offset, title, data, lenstats, cur
                 rows_containing_data.append(row_number)
 
     with suppress(curses.error):
-        window.addstr(0, column_offset-8, "{}/{} {} {}   {}".format(current+1, lenstats, movchr1, movchr2, title))
+        window.addstr(0, column_offset-8, "{}/{} {} {}  dev {!r}".format(current+1, lenstats, movchr1, movchr2, title))
     #for row_number in range(1, len(table[0])):
     #    if not rows_containing_data or not min(rows_containing_data)-1 <= row_number <= max(rows_containing_data)+1: continue
     #    with suppress(curses.error):
@@ -143,11 +143,13 @@ def actual_display_at_location(window, column_offset, title, data, lenstats, cur
     if rows_containing_data:
     #        window.addstr(1, column_offset+(row_number*column_width), re.sub("\B. ?", "", table[0]._fields[row_number].replace("_", " ")))
         stat_names = list(reversed(list(table[0]._fields[1:])))
+        with suppress(curses.error):
+            window.addstr(printed_row_number+3, column_offset+2-len("stats  "), "stats")
         while stat_names:
             printed_row_number += 1
             stat_name = stat_names.pop(0)
             with suppress(curses.error):
-                window.addstr(printed_row_number, column_offset+3, "{}`{}".format("| " * len(stat_names), stat_name))
+                window.addstr(printed_row_number, column_offset+2, "{}`{}".format("| " * len(stat_names), stat_name))
     else:
         with suppress(curses.error):
             window.addstr(4, 16, "(no data)")
@@ -173,6 +175,9 @@ def display_each_to(pool, filename, window):
         message = "  Population of column's histogram buckets shown with .a-z^ and colors"
         with suppress(curses.error):
             window.addstr(height-1, width-len(message)-1, message)
+        for i, (ch, color) in enumerate(zip(reversed(message), reversed(HISTOGRAM_ANSI_COLORS))):
+            with suppress(curses.error):
+                window.addstr(height-1, width-1-i-1, ch, curses.color_pair(color))
 
         window.refresh()
 
@@ -215,7 +220,7 @@ def display_parallel_to(pool, filename, window):
                     rows_containing_data.add(row_number)
 
         with suppress(curses.error):
-            window.addstr(0, 0, "Displaying {!r} for all device levels.  {}/{} ← → ".format(stats[0][1][0]._fields[current+1], current+1, len(stats[0][1][0])-1))
+            window.addstr(0, 1, "{}/{} ← →   Statistic {!r}".format(current+1, len(stats[0][1][0])-1, stats[0][1][0]._fields[current+1]))
         # Assume all histogram buckets are the same
         printed_row_number = 0
         for row_number, row in enumerate(stats[0][1]):
@@ -237,6 +242,8 @@ def display_parallel_to(pool, filename, window):
 
         if rows_containing_data:
             device_names = list(reversed(list(device_name for device_name, device_data in stats)))
+            with suppress(curses.error):
+                window.addstr(printed_row_number+3, 12-len("devs  "), "devs")
             while device_names:
                 printed_row_number += 1
                 device_name = device_names.pop(0)
@@ -250,6 +257,9 @@ def display_parallel_to(pool, filename, window):
         message = "  Population of histogram buckets shown with .a-z^ and colors"
         with suppress(curses.error):
             window.addstr(height-1, width-len(message)-1, message)
+        for i, (ch, color) in enumerate(zip(reversed(message), reversed(HISTOGRAM_ANSI_COLORS))):
+            with suppress(curses.error):
+                window.addstr(height-1, width-1-i-1, ch, curses.color_pair(color))
 
         window.refresh()
 
@@ -276,6 +286,7 @@ def main(window, args):
     window.timeout(1000)
 
     curses.use_default_colors()
+    curses.curs_set(0)
     for i in range(0, curses.COLORS):
         curses.init_pair(i + 1, i, -1)
 
