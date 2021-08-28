@@ -300,7 +300,7 @@ if __name__ == "__main__":
         print(exc)
     except Exception as exc:
         print("CRASH! Sorry!")
-        print("Please report this error at \nhttps://github.com/chadmiller/zfs-stat-info/issues/new")
+        print("Please report this error at \nhttps://github.com/chadmiller/zpool-iostat-viz/issues/new")
         print()
         print("Paste the following:")
         if raw is not None:
