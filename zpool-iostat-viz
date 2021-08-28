@@ -175,8 +175,7 @@ def display_each_to(pool, filename, window):
         message = "  Population of column's histogram buckets shown with .a-z^ and colors"
         with suppress(curses.error):
             window.addstr(height-1, width-len(message)-1, message)
-        for i, (ch, color) in enumerate(zip(reversed(message), reversed(HISTOGRAM_ANSI_COLORS))):
-            with suppress(curses.error):
+            for i, (ch, color) in enumerate(zip(reversed(message), reversed(HISTOGRAM_ANSI_COLORS))):
                 window.addstr(height-1, width-1-i-1, ch, curses.color_pair(color))
 
         window.refresh()
@@ -257,8 +256,7 @@ def display_parallel_to(pool, filename, window):
         message = "  Population of histogram buckets shown with .a-z^ and colors"
         with suppress(curses.error):
             window.addstr(height-1, width-len(message)-1, message)
-        for i, (ch, color) in enumerate(zip(reversed(message), reversed(HISTOGRAM_ANSI_COLORS))):
-            with suppress(curses.error):
+            for i, (ch, color) in enumerate(zip(reversed(message), reversed(HISTOGRAM_ANSI_COLORS))):
                 window.addstr(height-1, width-1-i-1, ch, curses.color_pair(color))
 
         window.refresh()
