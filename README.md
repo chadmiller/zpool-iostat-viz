@@ -29,8 +29,12 @@ The histogram uses both colors to show relative population, but also glyphs. The
 
 To run, have Python 3 of the last few years, and run it with the pool name as parameter.
 
+`$ zpool-iostat-viz`
+
 `$ zpool-iostat-viz tank`
 
-It displays data points in the histogram as letters of the alphabet, scaled and colored to show hot-ness of that bucket. It's scaled so that each column has a most-filled "z", and the rest of the letters show relative population vs the most populous bucket.
+`$ zpool-iostat-viz tank1 tank2 tank3`
+
+It displays data points in the histogram as letters of the alphabet, scaled and colored to show hot-ness of that bucket. It's scaled so that each column has a most-filled "^", and the rest of the letters show relative population vs the most populous bucket.
 
 Press arrows to move stats, and press `q` to quit.
