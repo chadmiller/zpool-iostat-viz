@@ -13,8 +13,8 @@ import base64
 import argparse
 
 
-ColsIoStat = namedtuple("ColsIoStat", "latency_nsec total_read total_write disk_read disk_write syncq_read syncq_write asyncq_read asyncq_write scrub trim")
-IoStatSimple = namedtuple("IoStatSimple", "latency_nsec disk_read disk_write syncq_read syncq_write asyncq_read asyncq_write scrub")
+ColsIoStat = namedtuple("ColsIoStat", "latency_nsec total_wait_read total_wait_write disk_wait_read disk_wait_write syncq_wait_read syncq_wait_write asyncq_wait_read asyncq_wait_write scrub trim")
+ColsIoStat.__new__.__defaults__ = tuple(0 for x in ColsIoStat._fields)
 
 EMPTY_COLOR = 239
 EMPTY_CHAR = "|"
@@ -67,7 +67,6 @@ def get_stats(pool_names, filename=None):
             continue
         elif "\t" in line:
             row_number += 1
-            if row_number < 6: continue
             stats[-1][1].append(ColsIoStat(*tuple(int(s) for s in line.split("\t"))))
         else:
             row_number = -1
@@ -87,13 +86,12 @@ def scaled_to_fraction(range_minimum, subject_value, range_maximum):
 
 
 
-def actual_display_at_location(window, column_offset, title, data, lenstats, current, movchr1, movchr2):
+def actual_display_at_location(window, column_offset, title, table, lenstats, current, movchr1, movchr2):
     """Render a narrow table at a specified distance from the left. Useful to
     have parallel renderings of what's happening with a level of organization in a
     pool."""
     column_width = 2
 
-    table = tuple(IoStatSimple(row.latency_nsec, row.disk_read, row.disk_write, row.syncq_read, row.syncq_write, row.asyncq_read, row.asyncq_write, row.scrub) for row in data)
     maxes = [max(r) for r in zip(*table)]
     try:
         mins = [min(v for v in r if v != m/100) for r, m in zip(zip(*table), maxes)]
@@ -101,17 +99,13 @@ def actual_display_at_location(window, column_offset, title, data, lenstats, cur
         mins = [0 for x in maxes]
 
     rows_containing_data = list()
-    for row_number, row in enumerate(data):
+    for row_number, row in enumerate(table):
         for column_number, val in enumerate(row[1:]):
             if val > 0:
                 rows_containing_data.append(row_number)
 
     with suppress(curses.error):
         window.addstr(0, column_offset-8, "{}/{} {} {}  dev {!r}".format(current+1, lenstats, movchr1, movchr2, title))
-    #for row_number in range(1, len(table[0])):
-    #    if not rows_containing_data or not min(rows_containing_data)-1 <= row_number <= max(rows_containing_data)+1: continue
-    #    with suppress(curses.error):
-    #        window.addstr(1, column_offset+(row_number*column_width), re.sub("\B. ?", "", table[0]._fields[row_number].replace("_", " ")))
     printed_row_number = 0
     for row_number, row in enumerate(table):
         if not rows_containing_data or not min(rows_containing_data)-1 <= row_number <= max(rows_containing_data)+1: continue
@@ -132,7 +126,6 @@ def actual_display_at_location(window, column_offset, title, data, lenstats, cur
                     window.addstr(printed_row_number, column_offset+(column_number*column_width), EMPTY_CHAR, curses.color_pair(EMPTY_COLOR))
 
     if rows_containing_data:
-    #        window.addstr(1, column_offset+(row_number*column_width), re.sub("\B. ?", "", table[0]._fields[row_number].replace("_", " ")))
         stat_names = list(reversed(list(table[0]._fields[1:])))
         with suppress(curses.error):
             window.addstr(printed_row_number+3, column_offset+2-len("stats  "), "stats")

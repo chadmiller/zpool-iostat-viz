@@ -27,7 +27,7 @@ The histogram uses both colors to show relative population, but also glyphs. The
 
 # Usage and prerequisites
 
-To run, have Python 3 of the last few years, and run it with the pool name as parameter.
+To run, have Python 3.4 or greater, and run it with the pool name(s) as parameter.
 
 `$ zpool-iostat-viz`
 
