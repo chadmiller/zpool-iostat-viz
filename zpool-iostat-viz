@@ -59,7 +59,7 @@ def get_stats(pool_names, filename=None):
         with open(filename, encoding="UTF-8") as f:
             raw = f.read()
     else:
-        zpool_cmd = subprocess.run(["zpool", "iostat", "-wvHp"] + (pool_names if pool_names else []), check=True, capture_output=True, encoding="UTF-8")
+        zpool_cmd = subprocess.run(["zpool", "iostat", "-wvHp"] + (pool_names if pool_names else []), check=True, stdout=subprocess.PIPE, encoding="UTF-8")
         raw = zpool_cmd.stdout
     stats = []
     for line in raw.split("\n"):
