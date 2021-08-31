@@ -13,22 +13,22 @@ jobs:
         python-version: 3.9
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
+        python3 -m pip install --upgrade pip
         pip install pylint
     - name: Analysing the code with pylint
       run: |
         pylint --disable=global-statement,invalid-name,line-too-long,missing-function-docstring,missing-module-docstring,multiple-statements,no-else-continue,no-else-return,too-many-arguments,too-many-branches,too-many-locals,too-many-statements,use-list-literal zpool-iostat-viz
-  test34:
+  test35:
     runs-on: ubuntu-18.04
     steps:
     - uses: actions/checkout@v2
-    - name: Set up Python 3.4
+    - name: Set up Python 3.5
       uses: actions/setup-python@v2
       with:
-        python-version: 3.4
+        python-version: 3.5
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
+        python3 -m pip install --upgrade pip
         pip install pylint
     - name: Analysing the code with pylint
       run: |
