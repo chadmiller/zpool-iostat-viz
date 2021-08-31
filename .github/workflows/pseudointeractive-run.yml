@@ -20,4 +20,4 @@ jobs:
     - name: Pseudo-interactive test
       run: |
         # send input through pipe
-        { sleep 1; echo q; sleep 1; echo q; } |./zpool-iostat-viz --from-file about/sample\ zpool_iostat_-wvHp
+        { sleep 1; echo q; sleep 1; echo q; } |env TERM=xterm-256color ./zpool-iostat-viz --from-file about/sample\ zpool_iostat_-wvHp
