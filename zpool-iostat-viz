@@ -4,7 +4,6 @@
 # Copyright 2021 Chad Miller  chad.org
 #
 
-import sys
 import curses
 import subprocess
 from collections import namedtuple
@@ -287,7 +286,7 @@ if __name__ == "__main__":
         arg_parser.add_argument("--from-file", dest="file", action="store")
         arg_parser.add_argument("pools", metavar="POOLNAME", nargs="*", help="Pool name to display")
 
-        parsed_args = arg_parser.parse_args(sys.argv)
+        parsed_args = arg_parser.parse_args()
 
         curses.wrapper(lambda window: main(window, parsed_args.pools, parsed_args.file))
     except subprocess.CalledProcessError as exc:
