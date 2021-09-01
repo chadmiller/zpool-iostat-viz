@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
 #
-# Copyright 2021 Chad Miller  chad.org
+# Copyright (c) 2021, Chad Miller  chad.org
+# All rights reserved.
 #
 
 import curses
