@@ -4,15 +4,21 @@ https://user-images.githubusercontent.com/287758/131224903-c7ec43ce-66b1-4caa-bc
 
 The ZFS command "zpool iostat" provides a histogram listing of how often it takes to do things in parts of your pool. It's useful to find bottlenecks and problem devices, but it's also kind of hard to read, with the nearly 4000 mixed-unit numbers.
 
-(First, what's a histogram? It's an arrangement of data to show how measurements can be different and how often. For instance, last year, 60 times it took Joe 3-to-4 hours to drive to Albequerque, and 20 times it took 4-to-5 hours, 80 times it took 5-to-6 hours, and 2 times it took 6-to-7 hours. That 60-times & 20-times & 80-times & 2-times is a histogram showing population of the buckets of driving-times. It can help you understand the pattern of likelihoods. It seems when Joe has a traffic problem, it's usually pretty big; and problems happen more often than not; but sometimes it's a breeze.)
+## What's a histogram?
 
-The exact number of items in a bucket does not matter at all! The gist and relative sizes is what's important, so the numerical output of the "zpool iostat" tool is harder to understand than it needs to be.
+A histogram is an arrangement of data to show how measurements can be different and how often. For instance, last year, 60 times it took Joe 3-to-4 hours to drive to Albequerque, and 20 times it took 4-to-5 hours, 80 times it took 5-to-6 hours, and 2 times it took 6-to-7 hours. That 60-times & 20-times & 80-times & 2-times is a histogram showing population of the buckets of driving-times. It can help you understand the pattern of likelihoods. It seems when Joe has a traffic problem, it's usually pretty big; and problems happen more often than not; but sometimes it's a breeze.
+
+<table><tr><th>count</th><td>0</td><td>60</td><td>20</td><td>80</td><td>2</td><td>0 times</td></tr><tr><th>bucket</th><td>0 to 3</td><td>3 to 4</td><td>4 to 5</td><td>5 to 6</td><td>6 to 7</td><td>7 to 8 hours</td></tr></table>
+
+## Mentally sizing the huge absolute numbers from ZFS
+
+The *exact number* of items in a histogram bucket *does not matter at all*. 36778213 ZFS operations vs 39214291 isn't a good comparison for humans to try to make. For understanding what's happening in your ZFS pool, the gist and relative sizes is what's important, so the numerical output of the "zpool iostat" tool is harder to understand than it needs to be. That's the problem this tool aims to fix.
 
 The tools here will summarize and display relative sizes of those numbers, side-by-side, to help you see what's important.
 
-![Simplified output shows all stats of a device at once](./about/compare-statistics-across-device.png)
-
 ![Simplified output compares all devices for a given statistic](./about/compare-devices-across-statistic.png)
+
+![Simplified output shows all stats of a device at once](./about/compare-statistics-across-device.png)
 
 
 # You can help!
@@ -31,10 +37,10 @@ To run, have Python 3.4 or greater, and run it with the pool name(s) as paramete
 
 `$ zpool-iostat-viz`
 
-`$ zpool-iostat-viz tank`
+`$ zpool-iostat-viz tank1 tank2`
 
-`$ zpool-iostat-viz tank1 tank2 tank3`
+`$ zpool-iostat-viz tank vdev42 vdev90 vdev163`
 
 It displays data points in the histogram as letters of the alphabet, scaled and colored to show hot-ness of that bucket. It's scaled so that each column has a most-filled "^", and the rest of the letters show relative population vs the most populous bucket.
 
-Press arrows to move stats, and press `q` to quit.
+Press arrows to move stats, and press `q` to quit.  "--help" argument to see what other options you have.
