@@ -5,6 +5,7 @@
 # All rights reserved.
 #
 
+import sys
 import curses
 import subprocess
 from collections import namedtuple
@@ -18,8 +19,7 @@ ColsIoStat.__new__.__defaults__ = tuple(0 for x in ColsIoStat._fields)
 
 EMPTY_COLOR = 239
 EMPTY_CHAR = "|"
-HISTOGRAM_ANSI_COLORS = range(40, 225+1, 77-40)
-TIME_ANSI_COLORS = range(231, 196-1, 225-231)
+PALETTES = list(range(start, end+(second-start), second-start) for second, start, end in ((63, 27, 207), (87, 51, 231), (116, 123, 88), (220, 226, 196), (224, 231, 196), (80, 51, 196), (77, 40, 225), (225, 231, 201), (243, 240, 255), (227, 226, 231), (27, 21, 51)))
 DISPLAY_CHARS = ".abcdefghijklmnopqrstuvwxyz^"
 
 raw = None
@@ -40,7 +40,7 @@ def short_time_and_color(ns):
     elif ns < 155000000:
         color = TIME_ANSI_COLORS[4]
     else:
-        color = TIME_ANSI_COLORS[-1]
+        color = TIME_ANSI_COLORS[5]
 
     if ns < 800000:
         return "{: 7.2f}µs".format(ns/1000), color
@@ -264,23 +264,44 @@ def main(window, pool, filename, views):
     curses.use_default_colors()
     curses.curs_set(0)
     for i in range(0, curses.COLORS):
-        curses.init_pair(i + 1, i, -1)
+        curses.init_pair(i, i, -1)
 
     for view in views:
-        if view == "device": display_measurements_for_device(pool, filename, window)
-        if view == "stat": display_devices_for_measurement(pool, filename, window)
+        if view == "d": display_measurements_for_device(pool, filename, window)
+        if view == "s": display_devices_for_measurement(pool, filename, window)
 
 
 if __name__ == "__main__":
     try:
         arg_parser = argparse.ArgumentParser("zpool-iostat-viz", description="Display ZFS pool statistics, by device and by measurement")
-        arg_parser.add_argument("--by-stat", dest="view", action="append_const", const="stat", help="show all devices for a stat [default]")
-        arg_parser.add_argument("--by-device", dest="view", action="append_const", const="device", help="show all stats for a device")
-        arg_parser.add_argument("--from-file", dest="file", action="store")
+
+        arg_parser.add_argument("-b", "--by", dest="by", action="store", default="s", help="slice data by [d]evice or [s]tat (s)")
+        arg_parser.add_argument("-f", "--from-file", dest="file", action="store")
+        arg_parser.add_argument("--pal-time", "--pt", action="store", metavar="P", default="3", help="palette for time buckets")
+        arg_parser.add_argument("--pal-count", "--pc", action="store", metavar="P", default="0", help="palette for bucket populations")
         arg_parser.add_argument("parts", metavar="pool/vdev", nargs="*", help="Pools or vdevs to display")
+        arg_parser.add_argument("--help-colors", action="store_true", help="see color palettes available")
 
         parsed_args = vars(arg_parser.parse_args())
-        curses.wrapper(lambda window: main(window, parsed_args["parts"], parsed_args["file"], parsed_args["view"] or ["stat"]))
+
+        help_see_colors = parsed_args["help_colors"]
+        try:
+            HISTOGRAM_ANSI_COLORS = PALETTES[int(parsed_args["pal_count"], 16)]
+            TIME_ANSI_COLORS = PALETTES[int(parsed_args["pal_time"], 16)]
+        except (IndexError, ValueError):
+            help_see_colors = True
+
+        if help_see_colors:
+            print("color palettes (P) for use with --pal-time P or --pal-count P")
+            for i, palette in enumerate(PALETTES):
+                rainbow = ["\033[38;5;{0}m {0:03d}\033[m".format(color, i) for color in palette]
+                print("   {0:x}   {1}".format(i, "".join(rainbow)), end="")
+                if hex(i)[2:] == parsed_args["pal_count"]: print("  (count)", end="")
+                if hex(i)[2:] == parsed_args["pal_time"]: print("  (time)", end="")
+                print()
+            sys.exit(0)
+
+        curses.wrapper(lambda window: main(window, parsed_args["parts"], parsed_args["file"], parsed_args["by"] or "s"))
     except subprocess.CalledProcessError as exc:
         print("I couldn't get your pool information. Make sure you have 'zpool' program and specify your pool correctly.")
         print(exc)
