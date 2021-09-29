@@ -17,7 +17,7 @@ jobs:
         pip install pylint
     - name: Analysing the code with pylint
       run: |
-        pylint --disable=global-statement,invalid-name,line-too-long,missing-function-docstring,missing-module-docstring,multiple-statements,no-else-continue,no-else-return,too-many-arguments,too-many-branches,too-many-locals,too-many-statements,use-list-literal zpool-iostat-viz
+        pylint --disable=global-statement,invalid-name,line-too-long,missing-function-docstring,missing-module-docstring,multiple-statements,no-else-continue,no-else-return,too-many-arguments,too-many-branches,too-many-locals,too-many-statements,use-list-literal,fixme,consider-using-f-string zpool-iostat-viz
   test35:
     runs-on: ubuntu-18.04
     steps:
@@ -32,4 +32,4 @@ jobs:
         pip install pylint
     - name: Analysing the code with pylint
       run: |
-        pylint --disable=global-statement,invalid-name,line-too-long,missing-function-docstring,missing-module-docstring,multiple-statements,no-else-continue,no-else-return,too-many-arguments,too-many-branches,too-many-locals,too-many-statements,use-list-literal zpool-iostat-viz
+        pylint --disable=global-statement,invalid-name,line-too-long,missing-function-docstring,missing-module-docstring,multiple-statements,no-else-continue,no-else-return,too-many-arguments,too-many-branches,too-many-locals,too-many-statements,use-list-literal,fixme zpool-iostat-viz

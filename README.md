@@ -29,7 +29,7 @@ Also, if the tool crashes, please file a ticket with the output. Include the sta
 
 # Meanings of output
 
-The histogram uses both colors to show relative population, but also glyphs. The glyphs are "." meaning the smallest but nonzero, "a" up through "z", and "^" represents the highest number among the buckets. The glyphs represent linear-growing, equidistant-apart number ranges.  "d" is 4 times farther away from "." than "a" is from ".".
+The histogram uses both colors to show relative population, but also glyphs. The glyphs are "." meaning the smallest but nonzero, "a" up through "z", and "^" represents the highest number among the buckets. The glyphs represent linear-growing, equidistant-apart number ranges.  "f" is 4 times farther away from "b" than "c" is from "b".
 
 # Usage and prerequisites
 
@@ -41,6 +41,10 @@ To run, have Python 3.4 or greater, and run it with the pool name(s) as paramete
 
 `$ zpool-iostat-viz tank vdev42 vdev90 vdev163`
 
+`$ zpool-iostat-viz -d`
+
 It displays data points in the histogram as letters of the alphabet, scaled and colored to show hot-ness of that bucket. It's scaled so that each column has a most-filled "^", and the rest of the letters show relative population vs the most populous bucket.
+
+Also useful is the differential updates mode, which you can select with "-d" parameter. It's like stats are reset every three seconds, so you can see what's happening right now with your pool, not since boot.
 
 Press arrows to move stats, and press `q` to quit.  "--help" argument to see what other options you have.

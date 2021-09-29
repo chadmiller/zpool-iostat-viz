@@ -8,14 +8,12 @@
 import sys
 import curses
 import subprocess
-from collections import namedtuple
 from contextlib import suppress
 import base64
 import argparse
+import itertools
+import time
 
-
-ColsIoStat = namedtuple("ColsIoStat", "latency_nsec total_wait_read total_wait_write disk_wait_read disk_wait_write syncq_wait_read syncq_wait_write asyncq_wait_read asyncq_wait_write scrub trim")
-ColsIoStat.__new__.__defaults__ = tuple(0 for x in ColsIoStat._fields)
 
 EMPTY_COLOR = 239
 EMPTY_CHAR = "|"
@@ -28,7 +26,6 @@ def short_time_and_color(ns):
     """Given a time in nanoseconds, return a pleasant, legible string
     approximating that time, and an integer representing an appropriate color for
     that number of nanoseconds of waiting. Bigger is worse."""
-    ## These timing colors are stupid and overly-opinionated. Please advise.
     if ns < 30000:
         color = TIME_ANSI_COLORS[0]
     elif ns < 600000:
@@ -61,13 +58,18 @@ def get_stats(pool_names, filename=None):
     else:
         zpool_cmd = subprocess.run(["zpool", "iostat", "-wvHp", "--"] + (pool_names if pool_names else []), check=True, stdout=subprocess.PIPE, encoding="UTF-8")
         raw = zpool_cmd.stdout
+
+    ## TODO: Get this header list from zpool somehow. Only it is authoratative.
+    headers = "total wait read/total wait write/disk wait read/disk wait write/syncq wait read/syncq wait write/asyncq wait read/asyncq wait write/scrub/trim".split("/")
+
     stats = []
     for line in raw.split("\n"):
         if not line:
             continue
         elif "\t" in line:
             row_number += 1
-            stats[-1][1].append(ColsIoStat(*tuple(int(s) for s in line.split("\t"))))
+            values = tuple(int(s) for s in line.split("\t"))
+            stats[-1][1].append((values[0], dict(zip(headers, values[1:]))))
         else:
             row_number = -1
             stats.append([line, []])
@@ -84,147 +86,86 @@ def scaled_to_fraction(range_minimum, subject_value, range_maximum):
     return (subject_value-range_minimum) / (range_maximum-range_minimum)
 
 
-def actual_display_at_location(window, column_offset, title, table, lenstats, current, movchr1, movchr2):
-    """Render a narrow table at a specified distance from the left. Useful to
-    have parallel renderings of what's happening with a level of organization in a
-    pool."""
-    column_width = 2
-
-    maxes = [max(r) for r in zip(*table)]
-    try:
-        mins = [min(v for v in r if v != m/100) for r, m in zip(zip(*table), maxes)]
-    except ValueError:
-        mins = [0 for x in maxes]
-
-    rows_containing_data = list()
-    for row_number, row in enumerate(table):
-        for column_number, val in enumerate(row[1:]):
-            if val > 0:
-                rows_containing_data.append(row_number)
-
-    with suppress(curses.error):
-        window.addstr(0, column_offset-8, "{}/{} {} {}  dev {!r}".format(current+1, lenstats, movchr1, movchr2, title))
-    printed_row_number = 0
-    for row_number, row in enumerate(table):
-        if not rows_containing_data or not min(rows_containing_data)-1 <= row_number <= max(rows_containing_data)+1: continue
-        printed_row_number += 1
-        with suppress(curses.error):
-            t, col = short_time_and_color(row[0])
-            window.addstr(printed_row_number, column_offset-8, t, curses.color_pair(col)) # write legend
-        for column_number, val in enumerate(row):
-            if column_number == 0: continue  # skip legend
-            if val > maxes[column_number]//1000:  # don't show one-offs
-                scaled_0_to_1 = scaled_to_fraction(mins[column_number], val, maxes[column_number])
-                glyph = DISPLAY_CHARS[int(scaled_0_to_1 * (len(DISPLAY_CHARS)-1))]
-                color = HISTOGRAM_ANSI_COLORS[int(scaled_0_to_1 * (len(HISTOGRAM_ANSI_COLORS)-1))]
-                with suppress(curses.error):
-                    window.addstr(printed_row_number, column_offset+(column_number*column_width), glyph, curses.color_pair(color))
-            else:
-                with suppress(curses.error):
-                    window.addstr(printed_row_number, column_offset+(column_number*column_width), EMPTY_CHAR, curses.color_pair(EMPTY_COLOR))
-
-    if rows_containing_data:
-        stat_names = list(reversed(list(table[0]._fields[1:])))
-        with suppress(curses.error):
-            window.addstr(printed_row_number+3, column_offset+2-len("stats  "), "stats")
-        while stat_names:
-            printed_row_number += 1
-            stat_name = stat_names.pop(0)
-            with suppress(curses.error):
-                window.addstr(printed_row_number, column_offset+2, "{}`{}".format("| " * len(stat_names), stat_name))
-    else:
-        with suppress(curses.error):
-            window.addstr(4, 16, "(no data)")
+def stats_as_device_centric(stats):
+    """
+    >>> stats_as_device_centric([['dev1', [(1, {'mes1': 2, 'mes2': 3}), (4, {'mes1': 5, 'mes2': 6})]], ['dev2', [(1, {'mes1': 7, 'mes2': 8}), (4, {'mes1': 9, 'mes2': 10})]]])
+    [['dev1', [(1, {'mes1': 2, 'mes2': 3}), (4, {'mes1': 5, 'mes2': 6})]], ['dev2', [(1, {'mes1': 7, 'mes2': 8}), (4, {'mes1': 9, 'mes2': 10})]]]
+    """
+    return stats
 
 
-def display_measurements_for_device(pool, filename, window):
-    """Display all information about a vdev in a table."""
-    stats = get_stats(pool, filename)
-
-    current1 = 0
-    current2 = -1
-    while True:
-        window.clear()
-
-        title, data = stats[current1]
-        actual_display_at_location(window, 12, title, data, len(stats), current1, "←", "→")
-
-        #if window.getmaxyx()[1] > 90:
-        #    title, data = stats[current2]
-        #    actual_display_at_location(window, 60, title, data, len(stats), current2, "↓", "↑")
-
-        height, width = window.getmaxyx()
-        message = "  Population of column's histogram buckets shown with .a-z^ and colors"
-        with suppress(curses.error):
-            window.addstr(height-1, width-len(message)-1, message)
-            for i, (ch, color) in enumerate(zip(reversed(message), reversed(HISTOGRAM_ANSI_COLORS))):
-                window.addstr(height-1, width-1-i-1, ch, curses.color_pair(color))
-
-        window.refresh()
-
-        in_key = window.getch()
-        if in_key == -1:
-            pass
-        elif in_key == curses.KEY_RIGHT:
-            current1 += 1
-        elif in_key == curses.KEY_LEFT:
-            current1 -= 1
-        elif in_key == curses.KEY_UP:
-            current2 += 1
-        elif in_key == curses.KEY_DOWN:
-            current2 -= 1
-        elif in_key == ord('q') or in_key == ord('x') or in_key == 27:
-            return
-        current1 += len(stats)
-        current1 %= len(stats)
-        current2 += len(stats)
-        current2 %= len(stats)
-
-        stats = get_stats(pool, filename)
+def stats_as_measurement_centric(stats):
+    """
+    >>> stats_as_measurement_centric([['dev1', [(1, {'mes1': 2, 'mes2': 3}), (4, {'mes1': 5, 'mes2': 6})]], ['dev2', [(1, {'mes1': 7, 'mes2': 8}), (4, {'mes1': 9, 'mes2': 10})]]])
+    [['mes1', [(1, {'dev1': 2, 'dev2': 7}), (4, {'dev1': 5, 'dev2': 9})]], ['mes2', [(1, {'dev1': 3, 'dev2': 8}), (4, {'dev1': 6, 'dev2': 10})]]]
+    """
+    return list([r, [(y[0][1], y[1]) for y in t]]
+        for r, t in list([q, list(r)]
+            for q, r in itertools.groupby(sorted((k, dict((c,d) for a,b,c,d in gr))
+                for k, gr in itertools.groupby(sorted((measurement, time, device[0], value) for device in stats for time, measurementdict in device[1] for measurement, value in measurementdict.items()), key=lambda v: (v[0], v[1]))),
+            key=lambda x: x[0][0])))
 
 
-def display_devices_for_measurement(pool, filename, window):
-    """Display all devices for a given measurement. Emphasize comparison of devices."""
-    stats = get_stats(pool, filename)
-
+def render_stats(window, transform, should_show_differential, pool, filename=None):
+    iter_char = ""
+    read_count = 0
+    stats = []
     current = 0
+    load_time = None
     while True:
+        if not load_time or load_time + 3 < time.time():
+            old_stats, stats = stats, transform(get_stats(pool, filename))
+            load_time = time.time()
+            read_count += 1
+
+        name, rows  = stats[current]
+
+        if should_show_differential:
+            rows_containing_data = list(row_number for row_number in range(len(rows)))
+        else:
+            rows_containing_data = list(row_number for row_number, (_, data) in enumerate(rows) if any(colval > 0 for colval in data.values()))
+
+        if should_show_differential and old_stats:
+            rows = list((stats[current][1][rn][0], dict((newk, newv-oldv) for (newk,newv),(oldk,oldv) in zip(stats[current][1][rn][1].items(), old_stats[current][1][rn][1].items()))) for rn in range(len(rows)))
+
+        max_per_column = tuple(max(column) for column in zip(*tuple(row.values() for _, row in rows)))
+
+        if should_show_differential:
+            iter_char = "(" + r"\-/-"[read_count%4] + ") "
+            if not old_stats:
+                iter_char = "(?) "
+
         window.clear()
-
-        column_max = tuple(max(row[current+1] for row in device_data) for device_name, device_data in stats)
-
-        rows_containing_data = set()
-        for row_number, row in enumerate(stats[0][1]):
-            for device_number, (device_name, device_data) in enumerate(stats):
-                scaled_0_to_1 = scaled_to_fraction(0, device_data[row_number][current+1], column_max[device_number])
-                if scaled_0_to_1 > 0.001:
-                    rows_containing_data.add(row_number)
-
         with suppress(curses.error):
-            window.addstr(0, 1, "{}/{} ← →   Statistic {!r}".format(current+1, len(stats[0][1][0])-1, stats[0][1][0]._fields[current+1]))
-        # Assume all histogram buckets are the same
+            window.addstr(0, 1, "{}/{} ← →  {} Measurements of {!r}".format(current+1, len(stats), iter_char, name))
+
         printed_row_number = 0
-        for row_number, row in enumerate(stats[0][1]):
-            if not rows_containing_data or not min(rows_containing_data)-1 <= row_number <= max(rows_containing_data)+1: continue
+        for row_number, (time_ns, data) in enumerate(rows):
+            if not rows_containing_data: continue
+            if not min(rows_containing_data)-1 <= row_number <= max(rows_containing_data)+1: continue
             printed_row_number += 1
+
             with suppress(curses.error):
-                t, col = short_time_and_color(row[0])
+                t, col = short_time_and_color(time_ns)
                 window.addstr(printed_row_number, 0, t, curses.color_pair(col))  # write legend
-            for device_number, (device_name, device_data) in enumerate(stats):
-                scaled_0_to_1 = scaled_to_fraction(0, device_data[row_number][current+1], column_max[device_number])
-                glyph = DISPLAY_CHARS[int(scaled_0_to_1 * (len(DISPLAY_CHARS)-1))]
-                color = HISTOGRAM_ANSI_COLORS[int(scaled_0_to_1 * (len(HISTOGRAM_ANSI_COLORS)-1))]
-                if scaled_0_to_1 > 0.001:
-                    with suppress(curses.error):
-                        window.addstr(printed_row_number, 12+(device_number*2), glyph, curses.color_pair(color))
+
+            for col_number, value in enumerate(data.values()):
+
+                scaled_0_to_1 = scaled_to_fraction(0, value, max_per_column[col_number])
+                if scaled_0_to_1 > 0.001 or True:
+                    glyph = DISPLAY_CHARS[int(scaled_0_to_1 * (len(DISPLAY_CHARS)-1))]
+                    color = HISTOGRAM_ANSI_COLORS[int(scaled_0_to_1 * (len(HISTOGRAM_ANSI_COLORS)-1))]
                 else:
-                    with suppress(curses.error):
-                        window.addstr(printed_row_number, 12+(device_number*2), EMPTY_CHAR, curses.color_pair(EMPTY_COLOR))
+                    glyph = EMPTY_CHAR
+                    color = EMPTY_COLOR
+
+                with suppress(curses.error):
+                    window.addstr(printed_row_number, 12+(col_number*2), glyph, curses.color_pair(color))
 
         if rows_containing_data:
-            device_names = list(reversed(list(device_name for device_name, device_data in stats)))
-            with suppress(curses.error):
-                window.addstr(printed_row_number+3, 12-len("devs  "), "devs")
+            device_names = list(reversed(rows[0][1].keys()))
+            #with suppress(curses.error):
+            #    window.addstr(printed_row_number+3, 12-len("devs  "), "devs")
             while device_names:
                 printed_row_number += 1
                 device_name = device_names.pop(0)
@@ -252,13 +193,10 @@ def display_devices_for_measurement(pool, filename, window):
             current -= 1
         elif in_key == ord('q') or in_key == ord('x') or in_key == 27:
             return
-        current += len(stats[0][1][0])-1
-        current %= len(stats[0][1][0])-1
+        current += len(stats)
+        current %= len(stats)
 
-        stats = get_stats(pool, filename)
-
-
-def main(window, pool, filename, views):
+def main(window, should_show_differential, pool, filename, views):
     window.timeout(1000)
 
     curses.use_default_colors()
@@ -266,17 +204,25 @@ def main(window, pool, filename, views):
     for i in range(0, curses.COLORS):
         curses.init_pair(i, i, -1)
 
+    transformation_function = stats_as_measurement_centric
     for view in views:
-        if view == "d": display_measurements_for_device(pool, filename, window)
-        if view == "s": display_devices_for_measurement(pool, filename, window)
+        if view == "d": transformation_function = stats_as_device_centric
+        if view == "m": transformation_function = stats_as_measurement_centric
+
+    render_stats(window, transformation_function, should_show_differential, pool, filename)
 
 
 if __name__ == "__main__":
+    import doctest
+    if doctest.testmod().failed:
+        sys.exit(1)
+
     try:
         arg_parser = argparse.ArgumentParser("zpool-iostat-viz", description="Display ZFS pool statistics, by device and by measurement")
 
-        arg_parser.add_argument("-b", "--by", dest="by", action="store", default="s", help="slice data by [d]evice or [s]tat (s)")
-        arg_parser.add_argument("-f", "--from-file", dest="file", action="store")
+        arg_parser.add_argument("--diff", "-d", dest="diff", action="store_true", help="show changes while running")
+        arg_parser.add_argument("--by", dest="by", choices="dm", action="store", default="s", help="slice data by device or measurement")
+        arg_parser.add_argument("--from-file", "-f", dest="file", action="store")
         arg_parser.add_argument("--pal-time", "--pt", action="store", metavar="P", default="3", help="palette for time buckets")
         arg_parser.add_argument("--pal-count", "--pc", action="store", metavar="P", default="0", help="palette for bucket populations")
         arg_parser.add_argument("parts", metavar="pool/vdev", nargs="*", help="Pools or vdevs to display")
@@ -293,15 +239,15 @@ if __name__ == "__main__":
 
         if help_see_colors:
             print("color palettes (P) for use with --pal-time P or --pal-count P")
-            for i, palette in enumerate(PALETTES):
-                rainbow = ["\033[38;5;{0}m {0:03d}\033[m".format(color, i) for color in palette]
-                print("   {0:x}   {1}".format(i, "".join(rainbow)), end="")
-                if hex(i)[2:] == parsed_args["pal_count"]: print("  (count)", end="")
-                if hex(i)[2:] == parsed_args["pal_time"]: print("  (time)", end="")
+            for pi, palette in enumerate(PALETTES):
+                rainbow = ["\033[38;5;{0}m {0:03d}\033[m".format(color) for color in palette]
+                print("   {0:x}   {1}".format(pi, "".join(rainbow)), end="")
+                if hex(pi)[2:] == parsed_args["pal_count"]: print("  (count)", end="")
+                if hex(pi)[2:] == parsed_args["pal_time"]: print("  (time)", end="")
                 print()
             sys.exit(0)
 
-        curses.wrapper(lambda window: main(window, parsed_args["parts"], parsed_args["file"], parsed_args["by"] or "s"))
+        curses.wrapper(lambda window: main(window, parsed_args["diff"], parsed_args["parts"], parsed_args["file"], parsed_args["by"] or "m"))
     except subprocess.CalledProcessError as exc:
         print("I couldn't get your pool information. Make sure you have 'zpool' program and specify your pool correctly.")
         print(exc)
