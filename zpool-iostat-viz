@@ -131,7 +131,7 @@ def render_stats(window, transform, should_show_differential, pool, filename=Non
         max_per_column = tuple(max(column) for column in zip(*tuple(row.values() for _, row in rows)))
 
         if should_show_differential:
-            iter_char = "(" + r"\-/-"[read_count%4] + ") "
+            iter_char = "(" + r"╷╴╵╶"[read_count%4] + ") "
             if not old_stats:
                 iter_char = "(?) "
 
