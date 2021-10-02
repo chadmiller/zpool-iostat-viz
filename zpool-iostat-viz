@@ -164,7 +164,7 @@ def render_stats(window, transform, should_show_differential, pool, filename=Non
             for col_number, value in enumerate(data.values()):
 
                 scaled_0_to_1 = scaled_to_fraction(0, value, max_per_column[col_number])
-                if scaled_0_to_1 > 0.001 or True:
+                if scaled_0_to_1 > 0.001:
                     glyph = DISPLAY_CHARS[int(scaled_0_to_1 * (len(DISPLAY_CHARS)-1))]
                     color = HISTOGRAM_ANSI_COLORS[int(scaled_0_to_1 * (len(HISTOGRAM_ANSI_COLORS)-1))]
                 else:
