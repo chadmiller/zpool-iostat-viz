@@ -20,6 +20,9 @@ EMPTY_CHAR = "|"
 PALETTES = list(range(start, end+(second-start), second-start) for second, start, end in ((63, 27, 207), (87, 51, 231), (116, 123, 88), (220, 226, 196), (224, 231, 196), (80, 51, 196), (77, 40, 225), (225, 231, 201), (243, 240, 255), (227, 226, 231), (27, 21, 51)))
 DISPLAY_CHARS = ".abcdefghijklmnopqrstuvwxyz^"
 
+DIFFL_STAT_INTERVAL = 3 #seconds
+DIFFL_STAT_MEMORY = 5
+
 raw = None
 
 def short_time_and_color(ns):
@@ -109,12 +112,18 @@ def stats_as_measurement_centric(stats):
 def render_stats(window, transform, should_show_differential, pool, filename=None):
     iter_char = ""
     read_count = 0
-    stats = []
+    stats = None
+    stats_history = []
     current = 0
     load_time = None
     while True:
-        if not load_time or load_time + 3 < time.time():
-            old_stats, stats = stats, transform(get_stats(pool, filename))
+        if not load_time or load_time + DIFFL_STAT_INTERVAL < time.time():
+            if stats:
+                stats_history.append(stats)
+            while len(stats_history) > DIFFL_STAT_MEMORY:
+                stats_history.pop(0)
+
+            stats = transform(get_stats(pool, filename))
             load_time = time.time()
             read_count += 1
 
@@ -125,14 +134,17 @@ def render_stats(window, transform, should_show_differential, pool, filename=Non
         else:
             rows_containing_data = list(row_number for row_number, (_, data) in enumerate(rows) if any(colval > 0 for colval in data.values()))
 
-        if should_show_differential and old_stats:
-            rows = list((stats[current][1][rn][0], dict((newk, newv-oldv) for (newk,newv),(oldk,oldv) in zip(stats[current][1][rn][1].items(), old_stats[current][1][rn][1].items()))) for rn in range(len(rows)))
+        if should_show_differential and stats_history:
+            assert stats is not None
+            assert stats_history is not None
+            assert stats_history[0] is not None
+            rows = list((stats[current][1][rn][0], dict((newk, newv-oldv) for (newk,newv),(oldk,oldv) in zip(stats[current][1][rn][1].items(), stats_history[0][current][1][rn][1].items()))) for rn in range(len(rows)))
 
         max_per_column = tuple(max(column) for column in zip(*tuple(row.values() for _, row in rows)))
 
         if should_show_differential:
             iter_char = "(" + r"╷╴╵╶"[read_count%4] + ") "
-            if not old_stats:
+            if not stats_history:
                 iter_char = "(?) "
 
         window.clear()
