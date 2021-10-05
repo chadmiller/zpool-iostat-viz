@@ -15,7 +15,7 @@ import itertools
 import time
 
 
-EMPTY_COLOR = 239
+EMPTY_COLORS = (238, 8)
 EMPTY_CHAR = "|"
 PALETTES = list(range(start, end+(second-start), second-start) for second, start, end in ((63, 27, 207), (87, 51, 231), (116, 123, 88), (220, 226, 196), (224, 231, 196), (80, 51, 196), (77, 40, 225), (225, 231, 201), (243, 240, 255), (227, 226, 231), (27, 21, 51)))
 DISPLAY_CHARS = ".abcdefghijklmnopqrstuvwxyz^"
@@ -169,20 +169,23 @@ def render_stats(window, transform, should_show_differential, pool, filename=Non
                     color = HISTOGRAM_ANSI_COLORS[int(scaled_0_to_1 * (len(HISTOGRAM_ANSI_COLORS)-1))]
                 else:
                     glyph = EMPTY_CHAR
-                    color = EMPTY_COLOR
+                    color = EMPTY_COLORS[col_number % len(EMPTY_COLORS)]
 
                 with suppress(curses.error):
                     window.addstr(printed_row_number, 12+(col_number*2), glyph, curses.color_pair(color))
 
         if rows_containing_data:
             device_names = list(reversed(rows[0][1].keys()))
-            #with suppress(curses.error):
-            #    window.addstr(printed_row_number+3, 12-len("devs  "), "devs")
+            glyph = EMPTY_CHAR
             while device_names:
                 printed_row_number += 1
+                with suppress(curses.error):
+                    for col_number in range(len(device_names)):
+                        color = EMPTY_COLORS[col_number % len(EMPTY_COLORS)]
+                        window.addstr(printed_row_number, 12+(2*col_number), glyph, curses.color_pair(color))
                 device_name = device_names.pop(0)
                 with suppress(curses.error):
-                    window.addstr(printed_row_number, 12, "{}`{}".format("| " * len(device_names), device_name))
+                    window.addstr(printed_row_number, 12+(2*col_number), "`{}".format(device_name))
         else:
             with suppress(curses.error):
                 window.addstr(4, 16, "(no data)")
