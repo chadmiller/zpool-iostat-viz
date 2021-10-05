@@ -20,7 +20,6 @@ EMPTY_CHAR = "|"
 PALETTES = list(range(start, end+(second-start), second-start) for second, start, end in ((63, 27, 207), (87, 51, 231), (116, 123, 88), (220, 226, 196), (224, 231, 196), (80, 51, 196), (77, 40, 225), (225, 231, 201), (243, 240, 255), (227, 226, 231), (27, 21, 51)))
 DISPLAY_CHARS = ".abcdefghijklmnopqrstuvwxyz^"
 
-DIFFL_STAT_INTERVAL = 3 #seconds
 DIFFL_STAT_MEMORY = 5
 
 raw = None
@@ -116,8 +115,10 @@ def render_stats(window, transform, should_show_differential, pool, filename=Non
     stats_history = []
     current = 0
     load_time = None
+    diffl_stat_intervals = (2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 30, 60, 120, 180, 300, 600) #seconds
+    diffl_stat_interval_index = 2
     while True:
-        if not load_time or load_time + DIFFL_STAT_INTERVAL < time.time():
+        if not load_time or load_time + diffl_stat_intervals[diffl_stat_interval_index] < time.time():
             if stats:
                 stats_history.append(stats)
             while len(stats_history) > DIFFL_STAT_MEMORY:
@@ -143,13 +144,13 @@ def render_stats(window, transform, should_show_differential, pool, filename=Non
         max_per_column = tuple(max(column) for column in zip(*tuple(row.values() for _, row in rows)))
 
         if should_show_differential:
-            iter_char = "(" + r"╷╴╵╶"[read_count%4] + ") "
+            iter_char = "({}){:d}s↕ ".format(r"╷╴╵╶"[read_count%4], diffl_stat_intervals[diffl_stat_interval_index])
             if not stats_history:
-                iter_char = "(?) "
+                iter_char = "(&){:d}s↕ ".format(diffl_stat_intervals[diffl_stat_interval_index])
 
         window.clear()
         with suppress(curses.error):
-            window.addstr(0, 1, "{}/{} ← →  {} Measurements of {!r}".format(current+1, len(stats), iter_char, name))
+            window.addstr(0, 1, "{:>2d}/{}↔   {} Measurements of {!r}".format(current+1, len(stats), iter_char, name))
 
         printed_row_number = 0
         for row_number, (time_ns, data) in enumerate(rows):
@@ -206,6 +207,12 @@ def render_stats(window, transform, should_show_differential, pool, filename=Non
             current += 1
         elif in_key == curses.KEY_LEFT:
             current -= 1
+        elif in_key == curses.KEY_UP:
+            if diffl_stat_interval_index < len(diffl_stat_intervals) - 1:
+                diffl_stat_interval_index += 1
+        elif in_key == curses.KEY_DOWN:
+            if diffl_stat_interval_index > 0:
+                diffl_stat_interval_index -= 1
         elif in_key == ord('q') or in_key == ord('x') or in_key == 27:
             return
         current += len(stats)
