@@ -71,7 +71,7 @@ def get_stats(pool_names, filename=None):
         elif "\t" in line:
             row_number += 1
             values = tuple(int(s) for s in line.split("\t"))
-            stats[-1][1].append((values[0], dict(zip(headers, values[1:]))))
+            stats[-1][1].append((values[0], tuple(zip(headers, values[1:]))))
         else:
             row_number = -1
             stats.append([line, []])
@@ -90,22 +90,23 @@ def scaled_to_fraction(range_minimum, subject_value, range_maximum):
 
 def stats_as_device_centric(stats):
     """
-    >>> stats_as_device_centric([['dev1', [(1, {'mes1': 2, 'mes2': 3}), (4, {'mes1': 5, 'mes2': 6})]], ['dev2', [(1, {'mes1': 7, 'mes2': 8}), (4, {'mes1': 9, 'mes2': 10})]]])
-    [['dev1', [(1, {'mes1': 2, 'mes2': 3}), (4, {'mes1': 5, 'mes2': 6})]], ['dev2', [(1, {'mes1': 7, 'mes2': 8}), (4, {'mes1': 9, 'mes2': 10})]]]
+    >>> stats_as_device_centric([['dev1', [(1, (('mes1', 2), ('mes2', 3))), (4, (('mes1', 5), ('mes2', 6)))]], ['dev2', [(1, (('mes1', 7), ('mes2', 8))), (4, ('mes1', 9), ('mes2', 10))]]])
+    [['dev1', [(1, (('mes1', 2), ('mes2', 3))), (4, (('mes1', 5), ('mes2', 6)))]], ['dev2', [(1, (('mes1', 7), ('mes2', 8))), (4, ('mes1', 9), ('mes2', 10))]]]
     """
     return stats
 
 
 def stats_as_measurement_centric(stats):
     """
-    >>> stats_as_measurement_centric([['dev1', [(1, {'mes1': 2, 'mes2': 3}), (4, {'mes1': 5, 'mes2': 6})]], ['dev2', [(1, {'mes1': 7, 'mes2': 8}), (4, {'mes1': 9, 'mes2': 10})]]])
-    [['mes1', [(1, {'dev1': 2, 'dev2': 7}), (4, {'dev1': 5, 'dev2': 9})]], ['mes2', [(1, {'dev1': 3, 'dev2': 8}), (4, {'dev1': 6, 'dev2': 10})]]]
+    >>> stats_as_measurement_centric([['dev1', [(1, (('mes1', 2), ('mes2', 3))), (4, (('mes1', 5), ('mes2', 6)))]], ['dev2', [(1, (('mes1', 7), ('mes2', 8))), (4, (('mes1', 9), ('mes2', 10)))]]])
+    [['mes1', [(1, (('dev1', 2), ('dev2', 7))), (4, (('dev1', 5), ('dev2', 9)))]], ['mes2', [(1, (('dev1', 3), ('dev2', 8))), (4, (('dev1', 6), ('dev2', 10)))]]]
+    >>> stats_as_measurement_centric([['devx', [(1, (('mes1', 2), ('mes2', 3))), (4, (('mes1', 5), ('mes2', 6 )))]], ['devx', [(1, (('mes1', 7), ('mes2', 8))), (4, (('mes1', 9), ('mes2', 10)))]]])
+    [['mes1', [(1, (('devx', 2), ('devx', 7))), (4, (('devx', 5), ('devx', 9)))]], ['mes2', [(1, (('devx', 3), ('devx', 8))), (4, (('devx', 6), ('devx', 10)))]]]
+    >>> stats_as_measurement_centric([['dev2', [(1, (('mes2', 2), ('mes1', 3))), (4, (('mes2', 5), ('mes1', 6)))]], ['dev1', [(1, (('mes2', 7), ('mes1', 8))), (4, (('mes2', 9), ('mes1', 10)))]]])
+    [['mes2', [(1, (('dev2', 2), ('dev1', 7))), (4, (('dev2', 5), ('dev1', 9)))]], ['mes1', [(1, (('dev2', 3), ('dev1', 8))), (4, (('dev2', 6), ('dev1', 10)))]]]
     """
-    return list([r, [(y[0][1], y[1]) for y in t]]
-        for r, t in list([q, list(r)]
-            for q, r in itertools.groupby(sorted((k, dict((c,d) for a,b,c,d in gr))
-                for k, gr in itertools.groupby(sorted((measurement, time, device[0], value) for device in stats for time, measurementdict in device[1] for measurement, value in measurementdict.items()), key=lambda v: (v[0], v[1]))),
-            key=lambda x: x[0][0])))
+
+    return list([mes, list((timing, tuple(devicefortiming[4:] for devicefortiming in alldatafortiming)) for timing, alldatafortiming in itertools.groupby(sorted(v0, key=lambda six: six[3]), key=lambda six: six[3]))] for (_, mes), v0 in itertools.groupby(sorted(("m"+str(measurementnumber), "d"+str(devicenumber), measurementname, tns, device, bucketsize) for devicenumber, (device, timingsperdevice) in enumerate(stats) for tns, devicesandbuckets in timingsperdevice for measurementnumber, (measurementname, bucketsize) in enumerate(devicesandbuckets)), key=lambda six: (six[0], six[2])))
 
 
 def render_stats(window, transform, should_show_differential, pool, filename=None):
@@ -133,15 +134,15 @@ def render_stats(window, transform, should_show_differential, pool, filename=Non
         if should_show_differential:
             rows_containing_data = list(row_number for row_number in range(len(rows)))
         else:
-            rows_containing_data = list(row_number for row_number, (_, data) in enumerate(rows) if any(colval > 0 for colval in data.values()))
+            rows_containing_data = list(row_number for row_number, (_, data) in enumerate(rows) if any(colval > 0 for colhead, colval in data))
 
         if should_show_differential and stats_history:
             assert stats is not None
             assert stats_history is not None
             assert stats_history[0] is not None
-            rows = list((stats[current][1][rn][0], dict((newk, newv-oldv) for (newk,newv),(oldk,oldv) in zip(stats[current][1][rn][1].items(), stats_history[0][current][1][rn][1].items()))) for rn in range(len(rows)))
+            rows = list((stats[current][1][rn][0], tuple((newk, newv-oldv) for (newk,newv),(oldk,oldv) in zip(stats[current][1][rn][1], stats_history[0][current][1][rn][1]))) for rn in range(len(rows)))
 
-        max_per_column = tuple(max(column) for column in zip(*tuple(row.values() for _, row in rows)))
+        max_per_column = tuple(max(column) for column in zip(*tuple([v for k, v in row] for _, row in rows)))
 
         if should_show_differential:
             iter_char = "({}){:d}s↕ ".format(r"╷╴╵╶"[read_count%4], diffl_stat_intervals[diffl_stat_interval_index])
@@ -162,7 +163,7 @@ def render_stats(window, transform, should_show_differential, pool, filename=Non
                 t, col = short_time_and_color(time_ns)
                 window.addstr(printed_row_number, 0, t, curses.color_pair(col))  # write legend
 
-            for col_number, value in enumerate(data.values()):
+            for col_number, (_, value) in enumerate(data):
 
                 scaled_0_to_1 = scaled_to_fraction(0, value, max_per_column[col_number])
                 if scaled_0_to_1 > 0.001:
@@ -176,7 +177,7 @@ def render_stats(window, transform, should_show_differential, pool, filename=Non
                     window.addstr(printed_row_number, 12+(col_number*2), glyph, curses.color_pair(color))
 
         if rows_containing_data:
-            device_names = list(reversed(rows[0][1].keys()))
+            device_names = list(reversed([k for k, _ in rows[0][1]]))
             glyph = EMPTY_CHAR
             while device_names:
                 printed_row_number += 1
@@ -217,6 +218,7 @@ def render_stats(window, transform, should_show_differential, pool, filename=Non
             return
         current += len(stats)
         current %= len(stats)
+
 
 def main(window, should_show_differential, pool, filename, views):
     window.timeout(1000)
