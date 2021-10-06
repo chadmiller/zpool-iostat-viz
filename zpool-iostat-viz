@@ -19,6 +19,7 @@ EMPTY_COLORS = (238, 8)
 EMPTY_CHAR = "|"
 PALETTES = list(range(start, end+(second-start), second-start) for second, start, end in ((63, 27, 207), (87, 51, 231), (116, 123, 88), (220, 226, 196), (224, 231, 196), (80, 51, 196), (77, 40, 225), (225, 231, 201), (243, 240, 255), (227, 226, 231), (27, 21, 51)))
 DISPLAY_CHARS = ".abcdefghijklmnopqrstuvwxyz^"
+DIFFL_CLOCK_CHARS = "╷╴╵╶"
 
 DIFFL_STAT_MEMORY = 5
 
@@ -145,7 +146,7 @@ def render_stats(window, transform, should_show_differential, pool, filename=Non
         max_per_column = tuple(max(column) for column in zip(*tuple([v for k, v in row] for _, row in rows)))
 
         if should_show_differential:
-            iter_char = "({}){:d}s↕ ".format(r"╷╴╵╶"[read_count%4], diffl_stat_intervals[diffl_stat_interval_index])
+            iter_char = "({}){:d}s↕ ".format(DIFFL_CLOCK_CHARS[read_count%4], diffl_stat_intervals[diffl_stat_interval_index])
             if not stats_history:
                 iter_char = "(&){:d}s↕ ".format(diffl_stat_intervals[diffl_stat_interval_index])
 
