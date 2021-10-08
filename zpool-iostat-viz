@@ -42,7 +42,9 @@ def short_time_and_color(ns):
     else:
         color = TIME_ANSI_COLORS[5]
 
-    if ns < 800000:
+    if ns < 800:
+        return "{: 7.0f}ns".format(ns), color
+    elif ns < 800000:
         return "{: 7.2f}µs".format(ns/1000), color
     elif ns < 1000000000:
         return "{: 7.2f}ms".format(ns/1000/1000), color
