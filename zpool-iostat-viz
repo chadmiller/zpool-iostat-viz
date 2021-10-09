@@ -5,14 +5,16 @@
 # All rights reserved.
 #
 
-import sys
+from sys import exit
 import curses
 import subprocess
 from contextlib import suppress
-import base64
+from base64 import encodebytes as b64encodebytes
 import argparse
-import itertools
-import time
+from itertools import groupby
+from time import time
+from random import choice as randomchoice
+from math import log
 
 
 EMPTY_COLORS = (238, 8)
@@ -109,7 +111,7 @@ def stats_as_measurement_centric(stats):
     [['mes2', [(1, (('dev2', 2), ('dev1', 7))), (4, (('dev2', 5), ('dev1', 9)))]], ['mes1', [(1, (('dev2', 3), ('dev1', 8))), (4, (('dev2', 6), ('dev1', 10)))]]]
     """
 
-    return list([mes, list((timing, tuple(devicefortiming[4:] for devicefortiming in alldatafortiming)) for timing, alldatafortiming in itertools.groupby(sorted(v0, key=lambda six: six[3]), key=lambda six: six[3]))] for (_, mes), v0 in itertools.groupby(sorted(("m"+str(measurementnumber), "d"+str(devicenumber), measurementname, tns, device, bucketsize) for devicenumber, (device, timingsperdevice) in enumerate(stats) for tns, devicesandbuckets in timingsperdevice for measurementnumber, (measurementname, bucketsize) in enumerate(devicesandbuckets)), key=lambda six: (six[0], six[2])))
+    return list([mes, list((timing, tuple(devicefortiming[4:] for devicefortiming in alldatafortiming)) for timing, alldatafortiming in groupby(sorted(v0, key=lambda six: six[3]), key=lambda six: six[3]))] for (_, mes), v0 in groupby(sorted(("m"+str(measurementnumber), "d"+str(devicenumber), measurementname, tns, device, bucketsize) for devicenumber, (device, timingsperdevice) in enumerate(stats) for tns, devicesandbuckets in timingsperdevice for measurementnumber, (measurementname, bucketsize) in enumerate(devicesandbuckets)), key=lambda six: (six[0], six[2])))
 
 
 def render_stats(window, transform, should_show_differential, pool, filename=None):
@@ -122,14 +124,14 @@ def render_stats(window, transform, should_show_differential, pool, filename=Non
     diffl_stat_intervals = (2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 30, 60, 120, 180, 300, 600) #seconds
     diffl_stat_interval_index = 2
     while True:
-        if not load_time or load_time + diffl_stat_intervals[diffl_stat_interval_index] < time.time():
+        if not load_time or load_time + diffl_stat_intervals[diffl_stat_interval_index] < time():
             if stats:
                 stats_history.append(stats)
             while len(stats_history) > DIFFL_STAT_MEMORY:
                 stats_history.pop(0)
 
             stats = transform(get_stats(pool, filename))
-            load_time = time.time()
+            load_time = time()
             read_count += 1
 
         name, rows  = stats[current]
@@ -170,7 +172,7 @@ def render_stats(window, transform, should_show_differential, pool, filename=Non
 
                 scaled_0_to_1 = scaled_to_fraction(0, value, max_per_column[col_number])
                 if scaled_0_to_1 > 0.001:
-                    glyph = DISPLAY_CHARS[int(scaled_0_to_1 * (len(DISPLAY_CHARS)-1))]
+                    glyph = randomchoice(DISPLAY_CHARS[int(scaled_0_to_1 * (len(DISPLAY_CHARS)-1))])
                     color = HISTOGRAM_ANSI_COLORS[int(scaled_0_to_1 * (len(HISTOGRAM_ANSI_COLORS)-1))]
                 else:
                     glyph = EMPTY_CHAR
@@ -242,7 +244,7 @@ def main(window, should_show_differential, pool, filename, views):
 if __name__ == "__main__":
     import doctest
     if doctest.testmod().failed:
-        sys.exit(1)
+        exit(1)
 
     try:
         arg_parser = argparse.ArgumentParser("zpool-iostat-viz", description="Display ZFS pool statistics, by device and by measurement")
@@ -272,7 +274,7 @@ if __name__ == "__main__":
                 if hex(pi)[2:] == parsed_args["pal_count"]: print("  (count)", end="")
                 if hex(pi)[2:] == parsed_args["pal_time"]: print("  (time)", end="")
                 print()
-            sys.exit(0)
+            exit(0)
 
         curses.wrapper(lambda window: main(window, parsed_args["diff"], parsed_args["parts"], parsed_args["file"], parsed_args["by"] or "m"))
     except subprocess.CalledProcessError as exc:
@@ -284,5 +286,5 @@ if __name__ == "__main__":
         print()
         print("Paste the following:")
         if raw is not None:
-            print(base64.encodebytes(raw.encode("UTF-8")).decode("ASCII"), end="and also include ")
+            print(b64encodebytes(raw.encode("UTF-8")).decode("ASCII"), end="and also include ")
         raise exc
