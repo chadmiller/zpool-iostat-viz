@@ -114,7 +114,6 @@ def stats_as_measurement_centric(stats):
 
 
 def render_stats(window, transform, should_show_differential, pool, filename=None):
-    iter_char = ""
     read_count = 0
     stats = None
     stats_history = []
@@ -122,6 +121,7 @@ def render_stats(window, transform, should_show_differential, pool, filename=Non
     load_time = None
     diffl_stat_intervals = (2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 30, 60, 120, 180, 300, 600) #seconds
     diffl_stat_interval_index = 2
+    diffl_title = "(&){:d}s↕ ".format(diffl_stat_intervals[diffl_stat_interval_index])
     while True:
         if not load_time or load_time + diffl_stat_intervals[diffl_stat_interval_index] < time():
             if stats:
@@ -148,14 +148,15 @@ def render_stats(window, transform, should_show_differential, pool, filename=Non
 
         max_per_column = tuple(max(column) for column in zip(*tuple([v for k, v in row] for _, row in rows)))
 
-        if should_show_differential:
-            iter_char = "({}){:d}s↕ ".format(DIFFL_CLOCK_CHARS[read_count%4], diffl_stat_intervals[diffl_stat_interval_index])
-            if not stats_history:
-                iter_char = "(&){:d}s↕ ".format(diffl_stat_intervals[diffl_stat_interval_index])
 
         window.clear()
+        if should_show_differential:
+            if stats_history:
+                diffl_title = "({}){:d}s↕ ".format(DIFFL_CLOCK_CHARS[read_count%4], diffl_stat_intervals[diffl_stat_interval_index])
+            with suppress(curses.error):
+                window.addstr(0, 0, diffl_title)
         with suppress(curses.error):
-            window.addstr(0, 1, "{:>2d}/{}↔   {} Measurements of {!r}".format(current+1, len(stats), iter_char, name))
+            window.addstr(0, 10 if should_show_differential else 0, "{:>2d}/{}↔  Measurements of {!r}".format(current+1, len(stats), name))
 
         printed_row_number = 0
         for row_number, (time_ns, data) in enumerate(rows):
