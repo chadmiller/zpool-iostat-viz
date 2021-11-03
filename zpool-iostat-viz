@@ -62,8 +62,9 @@ def get_stats(pool_names, filename=None):
         with open(filename, encoding="UTF-8") as f:
             raw = f.read()
     else:
-        zpool_cmd = subprocess.run(["zpool", "iostat", "-wvHp", "--"] + (pool_names if pool_names else []), check=True, stdout=subprocess.PIPE, encoding="UTF-8")
-        raw = zpool_cmd.stdout
+        zpool = subprocess.Popen(["zpool", "iostat", "-wvHp", "--"] + (pool_names if pool_names else []), stdout=subprocess.PIPE)
+        raw = zpool.communicate()[0].decode("UTF-8")
+        assert zpool.wait() == 0
 
     ## TODO: Get this header list from zpool somehow. Only it is authoratative.
     headers = "total wait read/total wait write/disk wait read/disk wait write/syncq wait read (through txg)/syncq wait write (through txg)/asyncq wait read (from zil)/asyncq wait write (to zil)/scrub/trim".split("/")
