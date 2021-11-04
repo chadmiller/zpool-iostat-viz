@@ -59,10 +59,11 @@ def get_stats(pool_names, filename=None):
     is a list of rows, each as a ColsIoStat named tuple."""
     global raw
     if filename:
-        with open(filename, encoding="UTF-8") as f:
-            raw = f.read()
+        cmd = ["cat", filename]
     else:
-        zpool = subprocess.Popen(["zpool", "iostat", "-wvHp", "--"] + (pool_names if pool_names else []), stdout=subprocess.PIPE)
+        cmd = ["zpool", "iostat", "-wvHp", "--"] + (pool_names if pool_names else [])
+
+    with subprocess.Popen(cmd, stdout=subprocess.PIPE) as zpool:
         raw = zpool.communicate()[0].decode("UTF-8")
         assert zpool.wait() == 0
 
