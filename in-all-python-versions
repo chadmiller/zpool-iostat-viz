@@ -2,7 +2,7 @@
 
 set -u
 
-for pyver in 3.4 3.5 3.6 3.7 3.8 3.9 3.10-rc; do
+for pyver in 3.4 3.5 3.6 3.7 3.8 3.9 3.10 3.11-rc; do
 	echo -n "Python $pyver "
 	docker run -it --rm --name scr -v "$PWD":/usr/src/myapp -w /usr/src/myapp python:$pyver env TERM="$TERM" python3 "$@"
 	echo -e "\rPython $pyver exited with value $?"
