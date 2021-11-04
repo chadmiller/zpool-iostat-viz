@@ -181,20 +181,18 @@ def render_stats(window, transform, should_show_differential, pool, filename=Non
                     color = EMPTY_COLORS[col_number % len(EMPTY_COLORS)]
 
                 with suppress(curses.error):
+                    width = 12+(col_number*2)
                     window.addstr(printed_row_number, 12+(col_number*2), glyph, curses.color_pair(color))
 
         if rows_containing_data:
-            device_names = list(reversed([k for k, _ in rows[0][1]]))
-            glyph = EMPTY_CHAR
-            while device_names:
-                printed_row_number += 1
+            printed_row_number += 1
+            for i, value in enumerate(k for k, _ in rows[0][1]):
+                color = 2 + i//26
                 with suppress(curses.error):
-                    for col_number in range(len(device_names)):
-                        color = EMPTY_COLORS[col_number % len(EMPTY_COLORS)]
-                        window.addstr(printed_row_number, 12+(2*col_number), glyph, curses.color_pair(color))
-                device_name = device_names.pop(0)
+                    window.addstr(printed_row_number, 12+(i*2), chr(ord('A')+(i%26)), curses.color_pair(color))
                 with suppress(curses.error):
-                    window.addstr(printed_row_number, 12+(2*col_number), "`{}".format(device_name))
+                    window.addstr(2+i, width+8, chr(ord('A')+(i%26)), curses.color_pair(color))
+                    window.addstr(2+i, width+10, "= {}".format(value))
         else:
             with suppress(curses.error):
                 window.addstr(4, 16, "(no data)")
