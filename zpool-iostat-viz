@@ -225,6 +225,7 @@ def render_stats(window, transform, should_show_differential, pool, filename=Non
         elif in_key == ord('d'):
             should_show_differential = not should_show_differential
         elif in_key == ord('m'):
+            current = 0
             if transform == stats_as_device_centric:
                 transform = stats_as_measurement_centric
             else:
