@@ -225,16 +225,19 @@ def render_stats(window, transform, should_show_differential, pool, filename=Non
         elif in_key == ord('d'):
             should_show_differential = not should_show_differential
         elif in_key == ord('m'):
-            current = 0
+            stats = None
             stats_history = []
+            current = 0
+            load_time = None
             if transform == stats_as_device_centric:
                 transform = stats_as_measurement_centric
             else:
                 transform = stats_as_device_centric
         elif in_key == ord('q') or in_key == ord('x') or in_key == 27:
             return
-        current += len(stats)
-        current %= len(stats)
+        if stats:
+            current += len(stats)
+            current %= len(stats)
 
 
 def main(window, should_show_differential, pool, filename, views):
